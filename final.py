@@ -1,18 +1,22 @@
 import pandas as pd
 from values_check import analyze_company_support  # Your analysis function
 from email_crafting import generate_cold_email  # Your email generation function
+from linkeding_message_crafting import generate_linkedin_connection_note  # LinkedIn message function
 
 def process_excel_filter_and_generate_emails(
     input_filename='apollo_data.xlsx',
     output_filename='apollo_filtered_emails_output.xlsx',
-    instructions='',
+    instructions_email='',
+    instructions_linkedin='',
     limit_rows=3
 ):
     # Read Excel file and limit rows for testing
     df = pd.read_excel(input_filename, usecols=["company website", "posts"], engine='openpyxl').head(limit_rows)
 
     analysis_results = []
+    explanations = []
     generated_emails = []
+    generated_linkedin_messages = []
 
     for index, row in df.iterrows():
         company_website = str(row["company website"]).strip()
@@ -24,29 +28,44 @@ def process_excel_filter_and_generate_emails(
         is_true, explanation = analyze_company_support(company_website, posts)
 
         analysis_results.append(is_true)
+        explanations.append(explanation)
 
         if not is_true:
             print(f"Company evaluated as FALSE - generating email...")
-            email_text = generate_cold_email(company_website, posts, instructions, return_response=True)
+            email_text = generate_cold_email(company_website, posts, instructions_email, return_response=True)
         else:
             print(f"Company evaluated as TRUE - skipping email generation.")
             email_text = ""  # Or None if you prefer
 
         generated_emails.append(email_text)
 
+        # Generate LinkedIn connection note regardless of analysis result (or you can add logic if needed)
+        linkedin_message = generate_linkedin_connection_note(company_website, posts, instructions_linkedin, return_response=True)
+        generated_linkedin_messages.append(linkedin_message)
+
     # Add new columns to DataFrame
     df['supports_israel_or_haram'] = analysis_results
+    df['explanation'] = explanations
     df['generated_email'] = generated_emails
+    df['linkedin_message'] = generated_linkedin_messages
 
     # Save to new Excel file
     df.to_excel(output_filename, index=False)
-    print(f"\nFiltered emails saved to {output_filename}")
+    print(f"\nFiltered emails, explanations, and LinkedIn messages saved to {output_filename}")
+
+
+
 
 
 
 if __name__ == "__main__":
+    
     # Paste your detailed instructions here
-    instructions_text = """
+    linkedin_instructions = (
+        "Create a concise, polite LinkedIn connection note for cold outreach, personalized using the company website and LinkedIn posts."
+    )
+    
+    email_instructions = """
 Comprehensive Guidelines for High-Reply Cold Emails
 To generate high-reply cold emails for executives, I will follow these guidelines:
 
@@ -96,4 +115,10 @@ Professional & Respectful: Maintain a tone suitable for executives.
 
 """
 
-    process_excel_filter_and_generate_emails(instructions=instructions_text)
+    process_excel_filter_and_generate_emails(
+        input_filename='apollo_data.xlsx',
+        output_filename='apollo_filtered_emails_output.xlsx',
+        instructions_email=email_instructions,
+        instructions_linkedin=linkedin_instructions,
+        limit_rows=3
+    )
