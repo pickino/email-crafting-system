@@ -8,20 +8,21 @@ if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY not found in environment variables.")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-def generate_cold_email(company_website: str, posts: str, instructions: str, return_response: bool = False) -> str:
+def generate_cold_email(company_website: str, posts: str, instructions: str) -> tuple[str, str]:
     """
-    Generate a personalized cold email using Gemini AI without web search tool.
+    Generate a personalized cold email (subject and body) using Gemini AI without web search tool.
 
     Args:
         company_website (str): URL of the company website.
         posts (str): LinkedIn posts or social media content for personalization.
         instructions (str): Full detailed instructions for email crafting.
-        return_response (bool): If True, returns the generated email text; else prints it.
 
     Returns:
-        str: Generated email text if return_response=True, else None.
+        tuple[str, str]: A tuple containing (subject_line, email_body).
+                        Returns (error_msg, error_msg) if an error occurs.
     """
 
+    # Added clear instructions for formatting the output with a separator
     prompt = f"""
 Company Website:
 {company_website}
@@ -33,6 +34,14 @@ Instructions:
 {instructions}
 
 Please write a full cold email including subject line and body based on the above.
+Crucially, format your response strictly as follows:
+---SUBJECT_START---
+[Your Generated Subject Line Here]
+---SUBJECT_END---
+---BODY_START---
+[Your Generated Email Body Here]
+---BODY_END---
+Do not include any other text or formatting outside these delimiters.
 """
 
     config = GenerateContentConfig(
@@ -47,16 +56,57 @@ Please write a full cold email including subject line and body based on the abov
             contents=prompt,
             config=config
         )
-        if return_response:
-            return response.text.strip()
-        else:
-            print(response.text.strip())
+        full_response_text = response.text.strip()
+
+        # Parse the response to extract subject and body
+        subject_start_tag = "---SUBJECT_START---"
+        subject_end_tag = "---SUBJECT_END---"
+        body_start_tag = "---BODY_START---"
+        body_end_tag = "---BODY_END---"
+
+        subject_line = ""
+        email_body = ""
+
+        if subject_start_tag in full_response_text and subject_end_tag in full_response_text:
+            subject_start_index = full_response_text.find(subject_start_tag) + len(subject_start_tag)
+            subject_end_index = full_response_text.find(subject_end_tag)
+            subject_line = full_response_text[subject_start_index:subject_end_index].strip()
+        
+        if body_start_tag in full_response_text and body_end_tag in full_response_text:
+            body_start_index = full_response_text.find(body_start_tag) + len(body_start_tag)
+            body_end_index = full_response_text.find(body_end_tag)
+            email_body = full_response_text[body_start_index:body_end_index].strip()
+
+        # Fallback if parsing fails or tags are not found
+        if not subject_line and not email_body:
+            # If tags not found, treat the whole response as body and leave subject empty
+            print("Warning: Email parsing failed. Returning full response as body.")
+            email_body = full_response_text
+            subject_line = "Subject Parsing Failed" # Provide a default subject for clarity
+
+        return subject_line, email_body
+
     except Exception as e:
         error_msg = f"Error generating email: {e}"
-        if return_response:
-            return error_msg
-        else:
-            print(error_msg)
+        print(error_msg) # Print error for debugging
+        return error_msg, error_msg # Return error message in both parts of the tuple
+
+# Example usage (for testing this module independently)
+if __name__ == "__main__":
+    test_instructions = """
+    Create a very short and direct cold email about a new AI chatbot for customer support.
+    Subject line should be concise.
+    Body should quickly mention reducing support team workload and improving response times.
+    Focus on being brief.
+    """
+    subject, body = generate_cold_email(
+        company_website="https://example.com",
+        posts="Recent post about customer service challenges.",
+        instructions=test_instructions
+    )
+    print(f"\n--- Generated Email ---")
+    print(f"Subject: {subject}")
+    print(f"Body:\n{body}")
 
 
 

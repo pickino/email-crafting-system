@@ -1,22 +1,38 @@
 import pandas as pd
-from values_check import analyze_company_support  # Your analysis function
-from email_crafting import generate_cold_email  # Your email generation function
-from linkeding_message_crafting import generate_linkedin_connection_note  # LinkedIn message function
+# Assuming values_check.py contains analyze_company_support
+from values_check import analyze_company_support 
+# Assuming email_crafting.py now contains the modified generate_cold_email
+from email_crafting import generate_cold_email 
+# Assuming linkeding_message_crafting.py contains generate_linkedin_connection_note
+from linkeding_message_crafting import generate_linkedin_connection_note 
 
 def process_excel_filter_and_generate_emails(
     input_filename='apollo_data.xlsx',
     output_filename='apollo_filtered_emails_output.xlsx',
     instructions_email='',
     instructions_linkedin='',
-    limit_rows=3
+    limit_rows=-1    # limit row for testing, put -1 for full data
 ):
     # Read Excel file and limit rows for testing
-    df = pd.read_excel(input_filename, usecols=["company website", "posts"], engine='openpyxl').head(limit_rows)
+    # Specify all columns you intend to use to avoid issues if some are missing initially
+    df = pd.read_excel(input_filename, usecols=["company website", "posts"], engine='openpyxl')
+    
+    if limit_rows != -1:
+        df = df.head(limit_rows)
 
     analysis_results = []
     explanations = []
-    generated_emails = []
+    generated_email_subjects = [] # New list for subjects
+    generated_email_bodies = []   # Modified to store only the body
     generated_linkedin_messages = []
+    
+    # Initialize new columns as empty strings
+    df['email_subject'] = ''      # New column for subject line
+    df['email_body'] = ''         # This will now hold only the body
+    df['email'] = ''              # Placeholder for updated emails (if manually edited later)
+    df['drafted'] = ''
+    df['date_of_drafting'] = ''
+
 
     for index, row in df.iterrows():
         company_website = str(row["company website"]).strip()
@@ -30,14 +46,19 @@ def process_excel_filter_and_generate_emails(
         analysis_results.append(is_true)
         explanations.append(explanation)
 
+        email_subject = ""
+        email_body = ""
+
         if not is_true:
             print(f"Company evaluated as FALSE - generating email...")
-            email_text = generate_cold_email(company_website, posts, instructions_email, return_response=True)
+            # Call the modified generate_cold_email which returns a tuple
+            email_subject, email_body = generate_cold_email(company_website, posts, instructions_email)
         else:
             print(f"Company evaluated as TRUE - skipping email generation.")
-            email_text = ""  # Or None if you prefer
+            # Subject and body remain empty for skipped companies
 
-        generated_emails.append(email_text)
+        generated_email_subjects.append(email_subject)
+        generated_email_bodies.append(email_body) # Store only the body here
 
         # Generate LinkedIn connection note regardless of analysis result (or you can add logic if needed)
         linkedin_message = generate_linkedin_connection_note(company_website, posts, instructions_linkedin, return_response=True)
@@ -46,8 +67,28 @@ def process_excel_filter_and_generate_emails(
     # Add new columns to DataFrame
     df['supports_israel_or_haram'] = analysis_results
     df['explanation'] = explanations
-    df['generated_email'] = generated_emails
+    df['email_subject'] = generated_email_subjects  # Populate new subject column
+    df['generated_email'] = generated_email_bodies  # This now contains only the body, renamed for clarity in output
     df['linkedin_message'] = generated_linkedin_messages
+
+    # Reorder columns explicitly
+    desired_column_order = [
+        "company website",
+        "posts",
+        "supports_israel_or_haram",
+        "explanation",
+        "email_subject",        # New position for subject
+        "generated_email",      # This now holds the body
+        "email",                # Your manually updated email column
+        "linkedin_message",
+        "drafted",
+        "date_of_drafting"
+    ]
+    
+    existing_columns = df.columns.tolist()
+    final_column_order = [col for col in desired_column_order if col in existing_columns]
+    
+    df = df[final_column_order]
 
     # Save to new Excel file
     df.to_excel(output_filename, index=False)
@@ -89,7 +130,8 @@ Use '+' signs: To break up verbiage.
 Authentic: Avoid generic, salesy language; be human and authentic. The hook must feel genuine, not misleading.
 Length: Secondary to personalization (do not adhere to less than four words).
 First Sentence (Preview Text / Hook)
-Introduction: Either: "As-salamu alaykom [Name], we have yet to be properly introduced, but I'm Otmane Hanine and..." (signals prior research).
+Introduction: Either: "As-salamu alaikum [Name]
+We have yet to be properly introduced, but I'm Otmane Hanine and..." (signals prior research).
 Personalization: Or: Immediately reference a specific, authentic detail from their profile (e.g., a post, a personal interest) and tie it back.
 Website Pivot (If no personal insights): If personal LinkedIn insights are lacking or feel inauthentic to leverage, pivot to referencing specific, observable information from their company website (e.g., core services, specific challenges they address, stated goals). Directly connect this to a common industry pain point that your chatbot solves. Frame this connection genuinely, showing an understanding of their business.
 Value Proposition (Challenge Solved)
